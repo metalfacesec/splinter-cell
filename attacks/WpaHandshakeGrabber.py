@@ -1,5 +1,8 @@
 import socket
 from lib.Logger import Logger
+from lib.Target import Target
+from lib.APManager import APManager
+from lib.AccessPoint import AccessPoint
 from frames.Radiotap802_11 import Radiotap802_11
 
 class WpaHandshakeGrabber():
@@ -8,11 +11,11 @@ class WpaHandshakeGrabber():
         return s.recvfrom(2048)[0]
 
     @staticmethod
-    def updateUI(form, known_ap_list):
-        ap_ssid_list = []
-        for ap in known_ap_list:
-            ap_ssid_list.append("{} {}".format(ap.ssid, ap.source))
-        form.ap_list.values = ap_ssid_list
+    def updateUI(form, current_state, known_ap_list):
+        if current_state == 'scanning':
+            form.ap_list.values = known_ap_list
+        elif current_state == 'ap_locked':
+            pass
         form.display()
 
     @staticmethod
@@ -22,107 +25,30 @@ class WpaHandshakeGrabber():
         s = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(0x0003))
         s.bind((form.interface, 0x0003))
 
-        known_ap_list = []
-        locked_ap_clients = []
-        current_target_ap = None
-        current_state = 'finding_active_ap'
+        ap_manager = APManager()
+        current_state = 'scanning'
 
         while True:
             packet = WpaHandshakeGrabber.getFrame(s)
             frame = Radiotap802_11(packet)
 
-            ap_already_found = next((x for x in known_ap_list if x.ssid == frame.ssid), None)
-            if frame.isBeaconFrame() and ap_already_found is None:
-                known_ap_list.append(frame)
-                continue
+            if current_state == 'scanning':
+                if frame.isBeaconFrame():
+                    ap = AccessPoint(frame.ssid, frame.channel, frame.bssid_id)
+                    ap_manager.addAP(ap)
+                elif frame.isAckBlockFrame():
+                    target = Target(frame.destination)
+                    ap_manager.addTarget(target, frame.source)
 
-            if current_state == 'finding_active_ap' and frame.isBeaconFrame():
-                current_target_ap = frame
-                locked_ap_clients = []
-                current_state = 'ap_locked'
-                continue
+                if ap_manager.update():
+                    current_state = 'ap_locked'
+                    form.ap_list.hidden = True
+                    form.status_text.value = "Locked onto AP {}".format(ap_manager.locked_ap.ssid)
+            elif current_state == 'ap_locked':
+                pass
 
-            if current_state == 'ap_locked':
-                if frame.isAckBlockFrame() and frame.source == current_target_ap.source:
-                    Logger.log('!!!got and ack block onthje lockmed ap')
-                    pass
-
-                # ap_to_sniff.active_targets.append(addr1)
-
-                # ap_output_dir = './output/wpa_handshake/{}'.format(ap_found.mac)
-                # if not os.path.exists(ap_output_dir):
-                # os.mkdir(ap_output_dir)
-
-                # pcap_file = '{}/{}-{}.pcap'.format(ap_output_dir, ap_to_sniff.ssid, time.time())
-                # pcap = Pcap(pcap_file)
-                
-                # print 'Starting listen on AP: {}'.format(ap_found.mac)
-
-            WpaHandshakeGrabber.updateUI(form, known_ap_list)
-                
-                
-                
-
-
-            # if pkt[2:4].encode('hex') == '1a00':
-            #     len_of_header = struct.unpack('h', pkt[2:4])[0]
-                
-            #     radio_tap_header_frame = pkt[:len_of_header].encode('hex')
-                
-            #     beacon_frame = pkt[len_of_header:len_of_header + 24].encode('hex')
-
-            #     f_type = beacon_frame[:2]
-            #     addr1  = beacon_frame[8:20]
-            #     addr2  = beacon_frame[20:32]
-            #     addr3  = beacon_frame[32:44]
-
-            #     try:
-            #         len_of_ssid = ord(pkt[63])
-            #         ssid = pkt[64:64 + len_of_ssid]
-            #         channel = ord(pkt[64 + len_of_ssid + 12])
-            #     except:
-            #         ssid = "Unknown"
-            #         channel = 0
-                
-            #     ap = AccessPoint(ssid, channel, addr2)
-
-            #     if ap_to_sniff is not None:
-            #         pcap.write(pkt)
-            #         pcap.pcap_file.flush()
-
-            #         if f_type == FRAME_TYPE_QOS and len(pkt) == 163 and ap.mac == ap_to_sniff.mac:
-            #             print 'Handshake Found on {}'.format(ap_to_sniff.ssid)
-            #             ap_to_sniff = None
-
-            #     if f_type == FRAME_TYPE_ACK_BLOCK and ap_to_sniff is not None:
-            #         if (addr1 not in ap_to_sniff.active_targets):
-            #             ap_to_sniff.active_targets.append(addr1)
-
-            #         print 'Sending deauth packet to {}'.format(addr1)
-            #         sendDeauthPacket(s, addr2, addr1)
-            #         continue
-
-            #     if f_type == FRAME_TYPE_ACK_BLOCK and ap_to_sniff is None:
-            #         ap_found = next((x for x in ap_list if x.mac == addr2), None)
-            #         if ap_found is not None:
-            #             ap_to_sniff = ap_found
-            #             ap_to_sniff.active_targets.append(addr1)
-
-            #             ap_output_dir = './output/wpa_handshake/{}'.format(ap_found.mac)
-            #             if not os.path.exists(ap_output_dir):
-            #             os.mkdir(ap_output_dir)
-
-            #             pcap_file = '{}/{}-{}.pcap'.format(ap_output_dir, ap_to_sniff.ssid, time.time())
-            #             pcap = Pcap(pcap_file)
-                        
-            #             print 'Starting listen on AP: {}'.format(ap_found.mac)
-            #         continue
-
-            #     ap_already_found = next((x for x in ap_list if x.ssid == ssid), None)
-            #     if ap_already_found is None and f_type == FRAME_TYPE_ACK_BEACON:
-            #         if channel is not 0:
-            #             ap_list.append(ap)
-            #             printAPFound(f_type, ssid, channel, addr1, addr2, addr3)
+            
+            WpaHandshakeGrabber.updateUI(form, current_state, ap_manager.getPrettyAPList())
 
 
 
