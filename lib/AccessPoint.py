@@ -7,6 +7,3 @@ class AccessPoint:
         self.mac = mac
         self.last_beacon = time.time()
         self.targets = []
-
-    def updateLastBeaconTime(self, ap):
-        pass

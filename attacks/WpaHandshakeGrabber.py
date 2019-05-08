@@ -19,6 +19,12 @@ class WpaHandshakeGrabber():
         form.display()
 
     @staticmethod
+    def switchToLockedTargetView(form, ssid):
+        form.ap_list.value = "Locked onto AP {}".format(ssid)
+        form.ap_list.values = []
+
+
+    @staticmethod
     def run(form):
         form.status_text.value = "Looking for an AP with active users"
 
@@ -42,9 +48,9 @@ class WpaHandshakeGrabber():
 
                 if ap_manager.update():
                     current_state = 'ap_locked'
-                    form.ap_list.hidden = True
-                    form.status_text.value = "Locked onto AP {}".format(ap_manager.locked_ap.ssid)
+                    WpaHandshakeGrabber.switchToLockedTargetView(form, ap_manager.locked_ap.ssid)
             elif current_state == 'ap_locked':
+                form.ap_list.value = ap_manager.locked_ap.targets
                 pass
 
             
