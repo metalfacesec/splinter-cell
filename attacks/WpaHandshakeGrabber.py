@@ -11,16 +11,16 @@ class WpaHandshakeGrabber():
         return s.recvfrom(2048)[0]
 
     @staticmethod
-    def updateUI(form, current_state, known_ap_list):
+    def updateUI(form, current_state, ap_manager):
         if current_state == 'scanning':
-            form.ap_list.values = known_ap_list
+            form.ap_list.values = ap_manager.getPrettyAPList()
         elif current_state == 'ap_locked':
-            pass
+            form.ap_list.values = ap_manager.locked_ap.getPrettyTargetList()
         form.display()
 
     @staticmethod
     def switchToLockedTargetView(form, ssid):
-        form.ap_list.value = "Locked onto AP {}".format(ssid)
+        form.status_text.value = "Locked onto AP {}".format(ssid)
         form.ap_list.values = []
 
 
@@ -54,7 +54,9 @@ class WpaHandshakeGrabber():
                 pass
 
             
-            WpaHandshakeGrabber.updateUI(form, current_state, ap_manager.getPrettyAPList())
+
+            
+            WpaHandshakeGrabber.updateUI(form, current_state, ap_manager)
 
 
 
