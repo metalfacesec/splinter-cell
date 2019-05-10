@@ -14,5 +14,5 @@ class Deauth():
         dot11_type_sub = 0xc0
         dot11_flags = 0
         dot11_seq = 1810
-        dot11 =  struct.pack('HH6s6s6sH', dot11_type_sub, dot11_flags, mac_dst.decode("hex"), mac_src.decode("hex"), mac_src.decode("hex"), dot11_seq)
+        dot11 = struct.pack('HH6s6s6sH', dot11_type_sub, dot11_flags, mac_dst.decode("hex"), mac_src.decode("hex"), mac_src.decode("hex"), dot11_seq)
         return dot11

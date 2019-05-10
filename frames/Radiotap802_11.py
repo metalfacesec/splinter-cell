@@ -1,4 +1,5 @@
-import struct 
+import struct
+from lib.Logger import Logger
 
 class Radiotap802_11():
     def __init__(self, packet):
