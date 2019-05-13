@@ -85,7 +85,8 @@ class WpaHandshakeGrabber():
                     root_dev_name = form.interface.split('mon')[0]
                     Logger.log('Root dev name = {}'.format(root_dev_name))
                     Logger.log('Switching monitor to channel {}'.format(ap_manager.locked_ap.channel))
-                    process = subprocess.Popen("airmon-ng stop {};airmon-ng start {} {}".format(form.interface, root_dev_name, ap_manager.locked_ap.channel), shell=True, stdout=subprocess.PIPE)
+                    #process = subprocess.Popen("airmon-ng stop {};airmon-ng start {} {}".format(form.interface, root_dev_name, ap_manager.locked_ap.channel), shell=True, stdout=subprocess.PIPE)
+                    process = subprocess.Popen("iwconfig {} channel {} > /dev/null 2>&1".format(form.interface, ap_manager.locked_ap.channel), shell=True, stdout=subprocess.PIPE)
                     process.wait()
 
                     s = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(0x0003))
